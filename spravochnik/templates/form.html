@@ -1,0 +1,11 @@
+{% extends 'index.html' %}
+
+{% block content %}
+    <div class="row form" align=center>
+        <form method="post">
+            {% csrf_token %}
+            {{ form }}
+            <input type="submit" class="btn btn-primary" value="Сохранить" style="margin-top: 10px">
+        </form>
+    </div>
+{% endblock %}
