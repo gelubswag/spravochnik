@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{pageTitle}}</title>
+    <link rel="stylesheet" href="{% static 'bootstrap.css'%}">
+    <style>
+        .form>div>div {
+            display: inline-table;
+            max-width: 100px;
+            margin-right: 20px;
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    {% if error%}
+    <script> alert('{{error}}')</script>
+    {%endif%}
+    {% block content %}
+    {% endblock%}
+</body>
+
+</html>

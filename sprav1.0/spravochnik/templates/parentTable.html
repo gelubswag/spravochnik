@@ -1,0 +1,38 @@
+{% extends 'index.html' %}
+
+{% block content%}
+<a class="btn btn-outline-secondary" href="{% url 'spravApp:main' %}" style="display: inline-block;">Назад</a>
+<div class="container">
+    <form method="POST">
+        {% csrf_token %}
+        <div class='form' > 
+            <div>
+                <div>
+                    <label for="id">id:</label><br>
+                    <input type="text" name="id" class="form-control" style="width: 100px; display:inline-block;" id="id_id">
+                </div>
+            {{form}}
+            </div>
+            <div align="right" style="margin-bottom: 10px; margin-right: 66px">
+                <input type="submit" name="search" class="btn btn-outline-success" value="Поиск">
+                <input type="submit" name="add" class="btn btn-outline-primary" value="Добавить">
+                <input type="submit" name="change" class="btn btn-outline-warning" value="Изменить">
+                <input type="submit" name="delete" class="btn btn-outline-danger" value="Удалить">
+            </div>
+        </div>
+    </form>
+
+    <table class="table table-bordered">
+        <tr class="row text-center" style="flex-wrap: nowrap">
+            <th class="col">id</th>
+            <th class="col">{{field}}</th>
+        </tr>
+        {% for Item in Items %}
+        <tr class="row text-center" style="flex-wrap: nowrap">
+            <td class="col">{{Item.id}}</td>
+            <td class="col">{{Item.val}}</td>
+        </tr>
+        {% endfor %}
+    </table> 
+</div>
+{% endblock %} 
