@@ -1,36 +1,8 @@
 from django.shortcuts import render,redirect
-from .models import Name, Fam, Otc, Street, MainItem, Phones
+from .models import Name, Fam, Otc, Street, MainItem
 from .forms import NameForm, FamForm, OtcForm, StreetForm, MainItemForm
+from django.db.models import QuerySet
 # Create your views here.
-
-def get_filtered_Maindata(request, data):
-            if request.POST.get('tel') and 'tel' in data.keys():
-                tel = request.POST.get('tel')
-                del data['tel']
-        
-            else:
-                tel = None
-            MainItems = [i.load_phones() for i in MainItem.objects.filter(**data).all()]
-            filtered_data = []
-            if tel:
-                for item in MainItems:
-                    phones_list = [str(i) for i in item.tel]
-                    if tel in phones_list:
-                            print(type(tel))
-                            filtered_data.append(item)
-                MainItems = filtered_data
-            else:
-                filtered_data = MainItems
-            return MainItems   
-
-def get_filtered_Maindata_ADD(request, data):
-            if request.POST.get('tel'):
-                tel = request.POST.get('tel')
-            else:
-                tel = None
-            MainItems = MainItem.objects.filter(**data).all()
-            return MainItems   
-        
 def change_fk(request, ParentTable, ItemPK):
     match ParentTable:
         case 'Name':
@@ -50,13 +22,15 @@ def change_fk(request, ParentTable, ItemPK):
     context = {
             'pageTitle': f'Change {ParentTable}',
             'form': form(instance=model.objects.filter(id=ItemPK).all()[0]),
+            'alert': str(model.objects.filter(id=ItemPK).all().query).replace('"','')
         }
     if request.method == 'GET':
         return render(request, 'form.html', context)
     else:
         data = {}
         if request.POST.get('id'): data['id'] = request.POST.get('id')
-        if request.POST.get('val'): data['val'] = request.POST.get('val')
+        if request.POST.get('val'): 
+            data['val'] = request.POST.get('val')
         try:
             item = model.objects.filter(id=ItemPK).update(**data)
             return redirect('spravApp:ParentTable', ParentTable=ParentTable)
@@ -92,6 +66,7 @@ def mainItemChange(request, ItemPK):
             'pageTitle': 'MainItemChange',
             'MainItems': MainItem.objects.filter(id=ItemPK).all(),
             'form': MainItemForm(instance=MainItem.objects.filter(id=ItemPK).all()[0]),
+            'alert': str(MainItem.objects.filter(id=ItemPK).all().query).replace('"','')
         }
     if request.method == 'GET':
         
@@ -110,31 +85,50 @@ def mainItemChange(request, ItemPK):
 
 def main(request):
     if request.method == 'GET':
-        MainItems = [i.load_phones() for i in MainItem.objects.all()]
         context = {
             'pageTitle': 'Main',
-            'MainItems': MainItems,
+            'MainItems': MainItem.objects.all(),
             'form': MainItemForm(),
+            'alert': str(MainItem.objects.all().query).replace('"',"")
         }
         return render(request, 'main.html', context)
     else:
         data = get_post_data(request)
         if "search" in request.POST:
-            MainItems = get_filtered_Maindata(request, data)
-                            
+            like_flg = 0
+            changed_data = data.copy()
+            MainItems = MainItem.objects.all()
+            for item in data.items():
+                if '%' in item[1]:
+                    like_flg = 1
+                    masks = item[1].split('%')
+                    dictionary = {f'{item[0]}__startswith': masks[0]}
+                    MainItems = MainItems & MainItem.objects.filter(**dictionary)
+                    if len(masks) > 2:
+                        for mask in masks[1:-1]:
+                            dictionary = {f'{item[0]}__contains': mask}
+                            MainItems = MainItems & MainItem.objects.filter(**dictionary)
+                    if len(masks) >= 2:
+                        dictionary = {f'{item[0]}__endswith': masks[-1]}
+                        MainItems = MainItems & MainItem.objects.filter(**dictionary)
+                    del changed_data[item[0]] 
+
+                    
+            if not like_flg: MainItems = MainItem.objects.filter(**data).all()
+            else: MainItems = (MainItems & MainItem.objects.filter(**changed_data)).all()
             context = {
             'pageTitle': 'Main',
             'MainItems': MainItems,
             'form': MainItemForm(),
+            'alert' : str(MainItems.query).replace('"',''),
             }
             return render(request, 'main.html', context)
         
         elif "add" in request.POST:
             data = get_foreign_key_data(request)
-            MainItems = get_filtered_Maindata(request, data)
-            print(MainItems)
-
-                        
+            
+            
+            MainItems = MainItem.objects.filter(**data).all()
             if MainItems:
                 context = {
                 'pageTitle': 'Main',
@@ -144,44 +138,25 @@ def main(request):
                 context['error'] = 'Контакт с заданнымы параметрами уже существует'
                 return render(request, 'main.html', context)
             else:
-                if request.POST.get('tel'): 
-                    tel = request.POST.get('tel')
-                MainItems = get_filtered_Maindata(request, data)
-                if not MainItems:
-                    try:
-                        item = MainItem.objects.create(**data)
-                        item.save()
-                        try:
-                            Phones.objects.create(val=tel, person=item).save()
-                        except:
-                            Phones.objects.create(val='', person=item).save()
-                        context = {
-                            'pageTitle': 'Main',
-                            'MainItems': [i.load_phones() for i in MainItem.objects.filter(**data).all()],
-                            'form': MainItemForm(),
-                            }
-                        return render(request, 'main.html', context)
-                    except Exception as ex:
-                        context = {
-                            'pageTitle': 'Main',
-                            'MainItems': MainItems,
-                            'form': MainItemForm(),
-                            'error': f'Не удалось добавить контакт: {ex}'
-                            }
-                        return render(request, 'main.html', context)
-                else:
-                    for item in MainItems:
-                        try:
-                            Phones.objects.create(val=tel, person=item).save()
-                        except:
-                            Phones.objects.create(val='', person=item).save()
-                        item.save()
-                        context = {
-                            'pageTitle': 'Main',
-                            'MainItems': [i.load_phones() for i in MainItems],
-                            'form': MainItemForm(),
-                            }
-                        return render(request, 'main.html', context)
+                try:
+                    MainItem.objects.create(**data).save()
+                
+                    context = {
+                        'pageTitle': 'Main',
+                        'MainItems': MainItem.objects.filter(**data).all(),
+                        'form': MainItemForm(),
+                        }
+                    return render(request, 'main.html', context)
+                except Exception as ex:
+                    context = {
+                        'pageTitle': 'Main',
+                        'MainItems': MainItem.objects.filter(**data).all(),
+                        'form': MainItemForm(),
+                        'error': f'Не удалось добавить контакт: {ex}',
+                        'alert': str(MainItem.objects.filter(**data).all().query).replace('"','')
+                        }
+                    return render(request, 'main.html', context)
+        
         elif "change" in request.POST:
             data = get_foreign_key_data(request)
         
@@ -192,6 +167,7 @@ def main(request):
                 'pageTitle': 'Main',
                 'MainItems': MainItems,
                 'form': MainItemForm(),
+                'alert': str(MainItems.query).replace('"','')
                 }
             if len(MainItems) == 0:
                 context['error'] = 'Контакт с заданными параметрами не найден'
@@ -209,6 +185,7 @@ def main(request):
                 'pageTitle': 'Main',
                 'MainItems': MainItems,
                 'form': MainItemForm(),
+                'alert': str(MainItems.query).replace('"','')
                 }
             if len(MainItems) == 0:
                 context['error'] = 'Контакт с заданными параметрами не найден'
@@ -240,7 +217,8 @@ def ParentTable(request,ParentTable):
             'pageTitle': f'{ParentTable}',
             'Items': model.objects.all(),
             'form': form(),
-            'field': ParentTable
+            'field': ParentTable,
+            'alert': str(model.objects.all().query).replace('"','')
         }
     if request.method == 'GET':
         return render(request, 'parentTable.html', context)
@@ -255,7 +233,8 @@ def ParentTable(request,ParentTable):
             'pageTitle': f'{ParentTable}',
             'Items': Items,
             'form': form(),
-            'field': ParentTable
+            'field': ParentTable,
+            'alert': str(Items.query).replace('"',''),
             }
             return render(request, 'parentTable.html', context)
         
@@ -266,7 +245,8 @@ def ParentTable(request,ParentTable):
                 context = {
                 'Items': Items,
                 'form': form(),
-                'field': ParentTable
+                'field': ParentTable,
+                'alert': str(Items.query).replace('"','')
                 }
                 context['error'] = 'Заданная строка уже существует'
                 return render(request, 'parentTable.html', context)
@@ -277,7 +257,8 @@ def ParentTable(request,ParentTable):
                     context = {
                         'Items': model.objects.filter(**data).all(),
                         'form': form(),
-                        'field': ParentTable
+                        'field': ParentTable,
+                        'alert': str(model.objects.filter(**data).all().query).replace('"','')
                         }
                     return render(request, 'parentTable.html', context)
                 except Exception as ex:
@@ -285,7 +266,8 @@ def ParentTable(request,ParentTable):
                         'Items': model.objects.filter(**data).all(),
                         'form': form(),
                         'error': f'Не удалось добавить в {ParentTable}: {ex}',
-                        'field': ParentTable
+                        'field': ParentTable,
+                        'alert': str(model.objects.filter(**data).all().query).replace('"','')
                         }
                     return render(request, 'parentTable.html', context)
         
@@ -299,7 +281,8 @@ def ParentTable(request,ParentTable):
             context = {
                 'Items': Items,
                 'form': form(),
-                'field': ParentTable
+                'field': ParentTable,
+                'alert': str(Items.query).replace('"','')
                 }
             if len(Items) == 0:
                 context['error'] = 'Данная строка с заданными параметрами не найдена'
@@ -318,7 +301,8 @@ def ParentTable(request,ParentTable):
             context = {
                 'Items': Items,
                 'form': form,
-                'field': ParentTable
+                'field': ParentTable,
+                'alert': str(Items.query).replace('"','')
                 }
             if len(Items) == 0:
                 context['error'] = 'Контакт с заданными параметрами не найден'
